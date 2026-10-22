@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="fr"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apex Sprint, analyse vidéo</title>
+<style>
+:root{--bg:#F5F5F2;--card:#fff;--ink:#0F1115;--mut:#5b6068;--line:#dcdcd6;--or:#FF5A1F;--g:#1a8f4c;--r:#c93434}
+@media(prefers-color-scheme:dark){:root{--bg:#0F1115;--card:#181b21;--ink:#F5F5F2;--mut:#9aa0a6;--line:#2a2e36;--g:#2ECC71;--r:#FF6B6B}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,Inter,sans-serif}
+.w{max-width:900px;margin:0 auto;padding:16px}
+h1{font:700 30px/1.1 "Arial Narrow",Impact,sans-serif;margin:0}h2{font:700 22px "Arial Narrow",Impact,sans-serif;margin:0 0 8px}
+.brand{letter-spacing:.12em;color:var(--or);font-weight:700;margin-bottom:4px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:12px 0}
+.mut{color:var(--mut);font-size:14px}
+.row{display:flex;gap:10px;flex-wrap:wrap}.row>div{flex:1;min-width:130px}
+label{display:block;font-size:14px;font-weight:600;margin:8px 0 4px}
+input,select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--bg);color:var(--ink);font:inherit}
+button{padding:13px 18px;border:0;border-radius:12px;background:var(--or);color:#0F1115;font:700 16px system-ui;cursor:pointer;margin-top:12px}
+button:disabled{opacity:.4;cursor:not-allowed}button.alt{background:transparent;color:var(--ink);border:1px solid var(--line)}
+.vw{position:relative;background:#000;border-radius:12px;overflow:hidden}.vw video,.vw canvas{display:block;width:100%}.vw canvas{position:absolute;inset:0;height:100%}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.m{border:1px solid var(--line);border-radius:12px;padding:12px;border-left:5px solid var(--mut)}
+.m.ok{border-left-color:var(--g)}.m.warn{border-left-color:var(--r)}
+.m span{font-size:13px;color:var(--mut)}.m b{display:block;font:700 26px/1.1 "Arial Narrow",sans-serif}.m small{color:var(--mut)}
+.tg{font-size:12px;font-weight:700}.ok .tg{color:var(--g)}.warn .tg{color:var(--r)}
+.df{border-left:5px solid var(--or);padding-left:12px;margin:14px 0}.df b{font-size:17px}
+.bar{height:8px;background:var(--line);border-radius:6px;overflow:hidden}.bar i{display:block;height:100%;background:var(--or);width:0}
+#st{min-height:22px}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}th:first-child,td:first-child{text-align:left}td.w{color:var(--r);font-weight:700}canvas.ch{width:100%;height:auto;border:1px solid var(--line);border-radius:10px;margin:6px 0 2px}
+</style></head><body><div class="w">
+<div class="brand">APEX SPRINT</div><h1>Analyse vidéo de la course</h1>
+<p class="mut">Ajoute la vidéo de ta course : l’outil détecte ses images par seconde, repère et corrige automatiquement un ralenti, stabilise un léger mouvement de caméra, puis analyse la technique et écrit les corrections directement sur la vidéo. L’analyse se fait sur ton appareil : la vidéo n’est envoyée nulle part. Internet est nécessaire pour charger le modèle de détection.</p>
+<details class="card"><summary><b>Comment filmer</b></summary><p class="mut">Caméra de profil, fixe, sur trépied à hauteur de hanche, à 10 à 15 m de la piste. L’athlète entier reste dans l’image sur au moins 5 à 6 pas. Vêtements ajustés, fond simple, bonne lumière. Idéal : 120 images par seconde ou plus. Ne bouge pas la caméra pendant la course. Un ralenti ne crée pas de précision en plus : plus la vidéo est tournée avec beaucoup d’images par seconde, plus les temps de contact sont fiables.</p></details>
+<div class="card"><h2>1. Vidéo et réglages</h2>
+<input type="file" id="f" accept="video/*">
+<div class="row"><div><label>Ralenti dans la vidéo</label><select id="slow"><option value="auto" selected>Détection automatique</option><option value="1">Aucun</option><option value="2">Ralenti x2</option><option value="4">Ralenti x4</option><option value="8">Ralenti x8</option></select></div>
+<div><label>Précision du modèle</label><select id="mdl"><option value="lite">Rapide (lite)</option><option value="full">Standard (full)</option><option value="heavy" selected>Maximale (heavy, plus lent)</option></select></div>
+<div><label>Stabilisation (léger mouvement de caméra)</label><select id="stab"><option value="1" selected>Activée</option><option value="0">Désactivée (caméra fixe)</option></select></div>
+<div><label>Phase de la course</label><select id="ph"><option value="acc">Accélération (0 à 30 m)</option><option value="vmax" selected>Vitesse maximale</option><option value="fin">Maintien / fin de course</option></select></div>
+<div><label>Taille de l’athlète (cm)</label><input id="h" type="number" value="178"></div>
+<div><label>Début (s), facultatif</label><input id="t0" type="number" step="0.1" placeholder="0"></div>
+<div><label>Fin (s), facultatif</label><input id="t1" type="number" step="0.1" placeholder="fin"></div></div>
+<button id="go" disabled>Analyser la vidéo</button><div class="bar" style="margin-top:12px"><i id="pb"></i></div><div id="st" class="mut">Chargement du modèle de détection…</div></div>
+<div class="card"><div class="vw"><video id="v" playsinline muted></video><canvas id="c"></canvas></div>
+<div id="rv" hidden><div class="row" style="align-items:end"><div><label>Vitesse de lecture</label><select id="spd"><option value="0.5">x0,5</option><option value="0.25" selected>x0,25</option><option value="0.1">x0,1</option></select></div><div><button id="pl" style="margin:0;width:100%">Lire au ralenti avec les corrections</button></div></div><div class="row" style="margin:8px 0"><div><button class="alt" id="nx" style="margin:0;width:100%">Prochain défaut</button></div><div><button class="alt" id="snap" style="margin:0;width:100%">Enregistrer l’image</button></div></div><label>Revoir image par image : <span id="fl"></span></label><input type="range" id="sl" min="0" value="0"><p class="mut">Vérifie que le squelette suit bien le corps. Vert : correct. Rouge : à corriger. Un cercle vert marque un pied au sol.</p></div></div>
+<div id="res"></div>
+</div>
+<script type="module">
+import {PoseLandmarker,FilesetResolver} from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs";
+const $=i=>document.getElementById(i),v=$("v"),cv=$("c"),cx=cv.getContext("2d");
+let lm=null,G=null,ts=0,FF=0,playing=false;
+const st=t=>$("st").textContent=t;
+async function loadModel(){lm=null;chk();st("Chargement du modèle…");try{const fs=await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"),nm=$("mdl").value;
+const o=d=>({baseOptions:{modelAssetPath:`https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${nm}/float16/1/pose_landmarker_${nm}.task`,delegate:d},runningMode:"VIDEO",numPoses:1,minPoseDetectionConfidence:.5,minTrackingConfidence:.5});
+try{lm=await PoseLandmarker.createFromOptions(fs,o("GPU"))}catch(e){lm=await PoseLandmarker.createFromOptions(fs,o("CPU"))}
+st("Modèle "+nm+" prêt. Choisis une vidéo.");chk()}catch(e){st("Impossible de charger le modèle. Vérifie ta connexion internet et recharge la page.")}}
+const chk=()=>$("go").disabled=!(lm&&v.src&&v.videoWidth);
+loadModel();$("mdl").onchange=loadModel;
+$("f").onchange=e=>{const f=e.target.files[0];if(!f)return;v.src=URL.createObjectURL(f);v.onloadedmetadata=async()=>{cv.width=v.videoWidth;cv.height=v.videoHeight;st("Lecture de la vidéo…");await detectFps();st("Vidéo chargée : "+v.duration.toFixed(1)+" s, "+FF+" images par seconde dans le fichier.");chk()}};
+const seek=t=>new Promise(r=>{v.addEventListener("seeked",r,{once:true});v.currentTime=t});
+const med=a=>[...a].sort((x,y)=>x-y)[Math.floor(a.length/2)],mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:NaN,pc=(a,p)=>[...a].sort((x,y)=>x-y)[Math.min(a.length-1,Math.floor(p*a.length))];
+const dist=(a,b)=>Math.hypot(a.x-b.x,a.y-b.y),mid=(a,b)=>({x:(a.x+b.x)/2,y:(a.y+b.y)/2});
+const ang=(a,b,c)=>{const p=[a.x-b.x,a.y-b.y],q=[c.x-b.x,c.y-b.y];return Math.acos(Math.max(-1,Math.min(1,(p[0]*q[0]+p[1]*q[1])/(Math.hypot(...p)*Math.hypot(...q)||1))))*180/Math.PI};
+const CON=[[11,12],[11,23],[12,24],[23,24],[23,25],[25,27],[27,29],[29,31],[27,31],[24,26],[26,28],[28,30],[30,32],[28,32],[11,13],[13,15],[12,14],[14,16]];
+function draw(p,i){cx.clearRect(0,0,cv.width,cv.height);if(!p)return;cx.lineWidth=Math.max(2,cv.width/300);cx.strokeStyle="#FF5A1F";
+CON.forEach(([a,b])=>{cx.beginPath();cx.moveTo(p[a].x,p[a].y);cx.lineTo(p[b].x,p[b].y);cx.stroke()});
+cx.fillStyle="#fff";[11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32].forEach(k=>{cx.beginPath();cx.arc(p[k].x,p[k].y,cx.lineWidth*1.3,0,7);cx.fill()});
+if(G&&i!=null)G.stances.forEach(t=>{if(i>=t.s&&i<=t.e){const q=G.F[t.f][i];cx.strokeStyle="#2ECC71";cx.lineWidth*=1.5;cx.beginPath();cx.arc(q.x,q.y,cv.width/45,0,7);cx.stroke();cx.lineWidth/=1.5;cx.strokeStyle="#FF5A1F"}})}
+$("go").onclick=async()=>{const ff=FF||30,t0=+$("t0").value||0,t1=Math.min(+$("t1").value||v.duration,v.duration),W=v.videoWidth,H=v.videoHeight;
+const n=Math.min(Math.floor((t1-t0)*ff),1200);if(n<10){st("Passage trop court.");return}
+if(playing)stopP();$("go").disabled=true;G=null;$("res").innerHTML="";$("rv").hidden=true;const fr=[];
+const ow=320,oh=Math.round(ow*H/W),oc=document.createElement("canvas");oc.width=ow;oc.height=oh;const ox=oc.getContext("2d",{willReadFrequently:true}),stab=$("stab").value==="1",cum=[];let prev=null,cx0=0,cy0=0,hit=0,lp=null;
+for(let i=0;i<n;i++){await seek(t0+i/ff);ts+=Math.round(1000/ff);const r=lm.detectForVideo(v,ts);const p=r.landmarks[0]?r.landmarks[0].map(q=>({x:q.x*W,y:q.y*H,v:q.visibility})):null;
+if(stab){ox.drawImage(v,0,0,ow,oh);const d=ox.getImageData(0,0,ow,oh).data,g=new Float32Array(ow*oh);for(let k=0;k<g.length;k++)g[k]=d[k*4]*.3+d[k*4+1]*.59+d[k*4+2]*.11;
+if(prev){let bb=null;if(lp){const xs=lp.map(q=>q.x*ow/W),ys=lp.map(q=>q.y*oh/H),a0=Math.min(...xs),a1=Math.max(...xs),b0=Math.min(...ys),b1=Math.max(...ys),mw=(a1-a0)*.2+6,mh=(b1-b0)*.2+6;bb=[a0-mw,b0-mh,a1+mw,b1+mh]}const s2=shift(prev,g,ow,oh,bb);cx0+=s2[0]*W/ow;cy0+=s2[1]*H/oh;if(s2[2])hit++}prev=g}
+cum.push({x:cx0,y:cy0});lp=p||lp;fr.push(p?p.map(q=>({x:q.x-cx0,y:q.y-cy0,v:q.v})):null);draw(p);$("pb").style.width=(i+1)/n*100+"%";st("Analyse : image "+(i+1)+" sur "+n)}
+try{const o={fps:ff,ff,t0,cum,H:+$("h").value||178,ph:$("ph").value};let f=$("slow").value;if(f==="auto")f=pickSlow(process(fr,o).cad);f=+f||1;const R=process(fr,{...o,fps:ff*f});R.slow=f;R.cam=Math.max(...cum.map(c=>Math.hypot(c.x-cum[0].x,c.y-cum[0].y)));R.hit=hit/n;G=R.G;show(R);$("sl").max=n-1;$("sl").value=0;$("rv").hidden=false;goto(Math.max(0,G.ann.findIndex(a=>a.some(x=>x.bad))));st("Analyse terminée.")}catch(e){st("Analyse impossible : "+e.message)}
+$("go").disabled=false};
+$("sl").oninput=async e=>{const i=+e.target.value;await seek(G.t0+i/G.ff);drawA(i);$("fl").textContent="image "+(i+1)+"/"+G.n+", tronc "+G.A[i].trunk.toFixed(0)+"°"};
+function process(fr,o){const n=fr.length,dt=1/o.fps;if(!fr.some(Boolean))throw new Error("aucune personne détectée. Vérifie le cadrage.");
+let l=null;for(let i=0;i<n;i++){if(fr[i])l=fr[i];else fr[i]=l}for(let i=n-1;i>=0;i--){if(fr[i])l=fr[i];else fr[i]=l}
+const K=[0,11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32],w=o.fps>=120?2:1;
+const sm=fr.map((f,i)=>{const g=f.map(p=>({...p}));K.forEach(k=>{let sx=0,sy=0,c=0;for(let j=Math.max(0,i-w);j<=Math.min(n-1,i+w);j++){sx+=fr[j][k].x;sy+=fr[j][k].y;c++}g[k].x=sx/c;g[k].y=sy/c});return g});
+const hp=sm.map(g=>mid(g[23],g[24])),q=Math.max(2,Math.floor(n/10)),dir=Math.sign(med(hp.slice(-q).map(p=>p.x))-med(hp.slice(0,q).map(p=>p.x)))||1;
+const seg=med(sm.map(g=>{const s=mid(g[11],g[12]),h=mid(g[23],g[24]),k=mid(g[25],g[26]),a=mid(g[27],g[28]);return dist(s,h)+dist(h,k)+dist(k,a)})),Hpx=seg/.78,mpp=(o.H/100)/Hpx;
+const A=sm.map(g=>{const s=mid(g[11],g[12]),h=mid(g[23],g[24]),sd=(a,b,c)=>({thigh:Math.atan2((g[b].x-g[a].x)*dir,g[b].y-g[a].y)*180/Math.PI,knee:ang(g[a],g[b],g[c])});return{trunk:Math.atan2((s.x-h.x)*dir,-(s.y-h.y))*180/Math.PI,L:sd(23,25,27),R:sd(24,26,28)}});
+const ft=(a,b)=>sm.map(g=>mid(g[a],g[b])),F={L:ft(29,31),R:ft(30,32)},gy=pc([...F.L,...F.R].map(p=>p.y),.92),stances=[];
+for(const s of["L","R"]){const f=F[s],c=f.map((p,i)=>{const a=Math.max(0,i-1),b=Math.min(n-1,i+1);return p.y>=gy-.05*Hpx&&Math.abs(f[b].x-f[a].x)/((b-a)*dt)/Hpx<1.6});
+for(let i=1;i<n-1;i++)if(!c[i]&&c[i-1]&&c[i+1])c[i]=true;
+for(let i=0;i<n;){if(c[i]){let j=i;while(j+1<n&&c[j+1])j++;if(j-i+1>=2)stances.push({f:s,s:i,e:j});i=j+1}else i++}}
+stances.sort((a,b)=>a.s-b.s);
+let rel=false;if(stances.filter(t=>t.s>0&&t.e<n-1).length<4){const rs=relStances(F,hp,dir,Hpx,n,dt);if(rs.filter(t=>t.s>0&&t.e<n-1).length>stances.length){stances.length=0;rs.forEach(t=>stances.push(t));rel=true}}
+const V=stances.filter(t=>t.s>0&&t.e<n-1),steps=[];
+for(let i=1;i<stances.length;i++){const a=stances[i-1],b=stances[i];if(a.f!==b.f)steps.push({t:(b.s-a.s)*dt,len:Math.abs(F[b.f][b.s].x-F[a.f][a.s].x)*mpp,fl:Math.max(0,(b.s-a.e-1)*dt),f:b.f,ct:(b.e-b.s+1)*dt,at:(F[b.f][b.s].x-hp[b.s].x)*dir*mpp*100})}
+const half=arr=>[arr.slice(0,Math.floor(arr.length/2)),arr.slice(Math.ceil(arr.length/2))];
+const pf=(L,R)=>{const a=mean(L),b=mean(R);return Math.abs(a-b)/((a+b)/2)*100};
+const per=s=>V.filter(t=>t.f===s),att=t=>(F[t.f][t.s].x-hp[t.s].x)*dir*mpp*100,ctt=t=>(t.e-t.s+1)*dt;
+const kd={L:pc(A.map(a=>a.L.thigh),.95),R:pc(A.map(a=>a.R.thigh),.95)},hl={L:pc(A.map(a=>a.L.knee),.05),R:pc(A.map(a=>a.R.knee),.05)};
+const pk={L:mean(per("L").map(t=>A[t.e].L.knee)),R:mean(per("R").map(t=>A[t.e].R.knee))},ctS={L:mean(per("L").map(ctt)),R:mean(per("R").map(ctt))};
+const ph=o.ph,fa=o.fps>=120?"":" (approximatif)",M=[],D=[];
+const TR={acc:[30,55],vmax:[0,12],fin:[0,15]}[ph],trunk=mean(A.map(a=>a.trunk)),AT={acc:15,vmax:25,fin:25}[ph],CT={acc:.15,vmax:.11,fin:.14}[ph],KD=ph==="acc"?45:55;
+const add=(id,label,val,txt,rng,bad,def)=>{const na=val==null||isNaN(val);M.push({id,label,txt:na?"n/d":txt,rng,st:na?"na":rng==="info"?"info":bad?"warn":"ok"});if(!na&&bad&&def)D.push({d:def,why:label+" : "+txt+" (cible "+rng+")"})};
+const sp=((hp[n-1].x-hp[0].x)*dir*mpp)/((n-1)*dt),cad=1/mean(steps.map(s=>s.t)),sl=mean(steps.map(s=>s.len)),ctm=mean(V.map(ctt)),flm=mean(steps.map(s=>s.fl));
+add("sp","Vitesse moyenne (hanche)",rel?NaN:sp,sp.toFixed(1)+" m/s","info",false);
+add("cad","Cadence",cad,cad.toFixed(2)+" pas/s","info",false);
+add("sl","Longueur de pas",rel?NaN:sl,sl.toFixed(2)+" m","info",false);
+add("tr","Angle du tronc",trunk,trunk.toFixed(0)+"°",TR[0]+" à "+TR[1]+"°",trunk>TR[1]||trunk<TR[0],trunk>TR[1]?"trunkHi":"trunkLo");
+const at=mean(V.map(att));add("at","Pose du pied devant le bassin",at,at.toFixed(0)+" cm","moins de "+AT+" cm",at>AT,"foot");
+add("ct","Temps de contact"+fa,o.fps>=60&&!rel?ctm:NaN,(ctm*1000).toFixed(0)+" ms","moins de "+CT*1000+" ms",ctm>CT,"contact");
+add("fl","Temps de vol"+fa,o.fps>=60&&!rel?flm:NaN,(flm*1000).toFixed(0)+" ms","info",false);
+const pkm=mean([pk.L,pk.R]);add("pk","Extension du genou à la poussée",pkm,pkm.toFixed(0)+"°","au moins "+(ph==="acc"?150:155)+"°",pkm<(ph==="acc"?150:155),"push");
+const kdm=mean([kd.L,kd.R]);add("kd","Montée du genou",kdm,kdm.toFixed(0)+"°","au moins "+KD+"°",kdm<KD,"knee");
+const hlm=mean([hl.L,hl.R]);add("hl","Récupération du talon (genou fermé)",hlm,hlm.toFixed(0)+"°","au plus "+(ph==="fin"?80:75)+"°",hlm>(ph==="fin"?80:75),"heel");
+const as=Math.max(pf([ctS.L],[ctS.R]),pf([kd.L],[kd.R]),pf([pk.L],[pk.R]));add("as","Asymétrie gauche/droite",as,as.toFixed(0)+" %","moins de 10 %",as>10,"asym");
+const fatigue=[];
+if(steps.length>=6){const[h1,h2]=half(steps),[v1,v2]=half(V),[a1,a2]=half(A);const dc=(1/mean(h2.map(s=>s.t))/(1/mean(h1.map(s=>s.t)))-1)*100,dl=(mean(h2.map(s=>s.len))/mean(h1.map(s=>s.len))-1)*100,dt2=(mean(v2.map(ctt))/mean(v1.map(ctt))-1)*100,dtr=mean(a2.map(a=>a.trunk))-mean(a1.map(a=>a.trunk));
+fatigue.push(["Cadence",dc.toFixed(1)+" %",dc<-5],["Longueur de pas",dl.toFixed(1)+" %",dl<-5],["Temps de contact",dt2.toFixed(1)+" %",dt2>10],["Angle du tronc",dtr.toFixed(1)+"°",Math.abs(dtr)>6]);
+if(fatigue.some(x=>x[2]))D.push({d:"fatigue",why:"Début contre fin du passage : "+fatigue.filter(x=>x[2]).map(x=>x[0]+" "+x[1]).join(", ")})}
+const PKT=ph==="acc"?150:155,hold=6,ann=Array.from({length:n},()=>[]);
+V.forEach(t=>{const ah=(F[t.f][t.s].x-hp[t.s].x)*dir*mpp*100,bd=ah>AT;for(let i=t.s;i<Math.min(n,t.s+hold);i++)ann[i].push({k:"td",f:t.f,bad:bd,txt:(bd?"Pied loin du bassin : ":"Pose du pied correcte : ")+ah.toFixed(0)+" cm"});
+const kn=A[t.e][t.f].knee,b2=kn<PKT;for(let i=Math.max(0,t.e-hold+1);i<=t.e;i++)ann[i].push({k:"to",f:t.f,bad:b2,txt:"Poussée : genou "+kn.toFixed(0)+"°"+(b2?" (incomplète)":"")})});
+["L","R"].forEach(s=>{const th=A.map(a=>a[s].thigh);for(let i=3;i<n-3;i++){if(th[i]>25&&th[i]===Math.max(...th.slice(i-3,i+4))){const bd=th[i]<KD;for(let j=i;j<Math.min(n,i+hold);j++)ann[j].push({k:"kn",f:s,bad:bd,txt:"Montée du genou : "+th[i].toFixed(0)+"°"+(bd?" (trop basse)":"")})}}});
+const vis=mean(fr.flatMap(f=>K.map(k=>f[k].v)))*100;
+return{M,D,fatigue,vis,cad,stepsL:steps,thr:{AT,CT,TR,KD,PK:PKT},rel,steps:steps.length,n,fps:o.fps,sm,A,F,stances,t0:o.t0,ff:o.ff,G:{sm,A,F,stances,t0:o.t0,ff:o.ff,n,ann,cum:o.cum,thr:{AT,CT,TR,KD,PK:PKT},dir}}}
+const pickSlow=c=>{if(!c||isNaN(c)||c>=2.5)return 1;let b=1,e=9;[2,4,8].forEach(f=>{const x=Math.abs(c*f-4.3);if(c*f>=3&&c*f<=6&&x<e){e=x;b=f}});return b};
+async function detectFps(){FF=30;if(!v.requestVideoFrameCallback)return;const tl=[];await new Promise(res=>{let k=0;const cb=(n,m)=>{tl.push(m.mediaTime);if(++k<24)v.requestVideoFrameCallback(cb);else res()};v.requestVideoFrameCallback(cb);v.currentTime=0;v.playbackRate=1;v.play().catch(res);setTimeout(res,2500)});v.pause();const d=[];for(let i=1;i<tl.length;i++)if(tl[i]>tl[i-1])d.push(tl[i]-tl[i-1]);if(d.length>3)FF=Math.min(480,Math.max(10,Math.round(1/med(d))));v.currentTime=0}
+const stopP=()=>{playing=false;v.pause();$("pl").textContent="Lire au ralenti avec les corrections"};
+function loop(n,m){if(!playing||!G)return;if(m.mediaTime>=G.t0+G.n/G.ff){stopP();return}const i=Math.round((m.mediaTime-G.t0)*G.ff);if(i>=0&&i<G.n){drawA(i);$("sl").value=i;$("fl").textContent="image "+(i+1)+"/"+G.n+", tronc "+G.A[i].trunk.toFixed(0)+"°"}v.requestVideoFrameCallback(loop)}
+$("pl").onclick=async()=>{if(!G)return;if(playing){stopP();return}if(!v.requestVideoFrameCallback){st("Lecture synchronisée indisponible sur ce navigateur. Utilise le curseur.");return}playing=true;$("pl").textContent="Arrêter";v.playbackRate=+$("spd").value;await seek(G.t0);v.play();v.requestVideoFrameCallback(loop)};
+function shift(a,b,w,h,bb){const R=6,st=2,sad=[];let best=1e18,bx=0,by=0;
+for(let dy=-R;dy<=R;dy++){sad[dy+R]=[];for(let dx=-R;dx<=R;dx++){let sm=0,c=0;for(let y=R;y<h-R;y+=st)for(let x=R;x<w-R;x+=st){if(bb&&x>bb[0]&&x<bb[2]&&y>bb[1]&&y<bb[3])continue;sm+=Math.abs(b[(y+dy)*w+x+dx]-a[y*w+x]);c++}const q=c?sm/c:1e9;sad[dy+R][dx+R]=q;if(q<best){best=q;bx=dx;by=dy}}}
+const sp=(m,c,p)=>{const d=m-2*c+p;return d>1e-6?.5*(m-p)/d:0};let fx=bx,fy=by;
+if(bx>-R&&bx<R)fx+=sp(sad[by+R][bx-1+R],best,sad[by+R][bx+1+R]);if(by>-R&&by<R)fy+=sp(sad[by-1+R][bx+R],best,sad[by+1+R][bx+R]);
+const flat=Math.abs(sad[R][R]-best)<.5;return[flat?0:fx,flat?0:fy,Math.abs(bx)===R||Math.abs(by)===R]}
+function relStances(F,hp,dir,Hpx,n,dt){const out=[];for(const s of["L","R"]){const r=F[s].map((p,i)=>(p.x-hp[i].x)*dir/Hpx),mx=[],mn=[];
+for(let i=2;i<n-2;i++){if(r[i]>=r[i-1]&&r[i]>=r[i+1]&&r[i]>r[i-2]&&r[i]>r[i+2])mx.push(i);if(r[i]<=r[i-1]&&r[i]<=r[i+1]&&r[i]<r[i-2]&&r[i]<r[i+2])mn.push(i)}
+mx.forEach(i=>{const j=mn.find(k=>k>i);if(j&&r[i]-r[j]>.15&&(j-i)*dt<.35)out.push({f:s,s:i,e:j})})}return out.sort((a,b)=>a.s-b.s)}
+async function goto(i){$("sl").value=i;await seek(G.t0+i/G.ff);drawA(i);$("fl").textContent="image "+(i+1)+"/"+G.n+", tronc "+G.A[i].trunk.toFixed(0)+"°"}
+function drawA(i){cx.clearRect(0,0,cv.width,cv.height);if(!G)return;const g=G.sm[i],cm=G.cum[i],A=G.A[i],T=G.thr,an=G.ann[i]||[],W=cv.width,lw=Math.max(2,W/260),fs=Math.max(14,Math.round(W/55)),OR="#FF5A1F",GR="#2ECC71",RD="#FF3B30",d=G.dir;
+const pt=k=>({x:g[k].x+cm.x,y:g[k].y+cm.y}),seg=(a,b,c,w)=>{cx.strokeStyle=c;cx.lineWidth=w||lw;cx.beginPath();cx.moveTo(a.x,a.y);cx.lineTo(b.x,b.y);cx.stroke()};
+const lab=(x,y,t,bad,r)=>{cx.font="600 "+fs+"px system-ui";const w=cx.measureText(t).width+16,h=fs+10;if(r)x-=w;x=Math.max(4,Math.min(W-w-4,x));y=Math.max(4,Math.min(cv.height-h-4,y));cx.fillStyle="rgba(0,0,0,.72)";cx.fillRect(x,y,w,h);cx.fillStyle=bad?RD:GR;cx.fillRect(x,y,5,h);cx.fillStyle="#fff";cx.fillText(t,x+10,y+fs)};
+const sh=mid(pt(11),pt(12)),hp=mid(pt(23),pt(24)),tb=A.trunk>T.TR[1]||A.trunk<T.TR[0],cl=(k,f)=>{const a=an.find(x=>x.k===k&&x.f===f);return a?(a.bad?RD:GR):null};
+[[11,12],[23,24],[11,13],[13,15],[12,14],[14,16]].forEach(([a,b])=>seg(pt(a),pt(b),OR));seg(sh,hp,tb?RD:GR,lw*1.8);
+[["L",23,25,27,29,31],["R",24,26,28,30,32]].forEach(([f,h,k,a,hl,fi])=>{const c=cl("td",f)||cl("to",f)||cl("kn",f)||OR;[[h,k],[k,a],[a,hl],[hl,fi],[a,fi]].forEach(([x,y])=>seg(pt(x),pt(y),c,c===OR?lw:lw*1.8))});
+cx.fillStyle="#fff";[11,12,13,14,15,16,23,24,25,26,27,28,29,30,31,32].forEach(k=>{const p=pt(k);cx.beginPath();cx.arc(p.x,p.y,lw*1.3,0,7);cx.fill()});
+cx.setLineDash([8,8]);seg(hp,{x:hp.x,y:sh.y},"rgba(255,255,255,.7)",lw*.6);cx.setLineDash([]);
+lab(sh.x+(d>0?20:-20),sh.y-fs*2.2,"Tronc "+A.trunk.toFixed(0)+"° (cible "+T.TR[0]+" à "+T.TR[1]+"°)",tb,d<0);
+let li=0;an.forEach(a=>{const fo=G.F[a.f][i],fp={x:fo.x+cm.x,y:fo.y+cm.y};
+if(a.k==="td"){seg({x:hp.x,y:fp.y},{x:fp.x,y:fp.y},a.bad?RD:GR,lw*1.5);seg(hp,{x:hp.x,y:fp.y},"rgba(255,255,255,.5)",lw*.6);lab(fp.x-60,fp.y+fs*(1+li++*1.8),a.txt,a.bad)}
+else{const kp=pt(a.f==="L"?25:26);lab(kp.x+(d>0?20:-20),kp.y-fs*(1+li++*1.8),a.txt,a.bad,d<0)}});
+G.stances.forEach(t=>{if(i>=t.s&&i<=t.e){const q=G.F[t.f][i];cx.strokeStyle=GR;cx.lineWidth=lw*1.3;cx.beginPath();cx.arc(q.x+cm.x,q.y+cm.y,W/45,0,7);cx.stroke()}})}
+$("nx").onclick=()=>{if(!G)return;let i=+$("sl").value;for(let j=1;j<=G.n;j++){const k=(i+j)%G.n;if((G.ann[k]||[]).some(a=>a.bad)){i=k;break}}goto(i)};
+$("snap").onclick=()=>{const c=document.createElement("canvas");c.width=cv.width;c.height=cv.height;const x=c.getContext("2d");x.drawImage(v,0,0,c.width,c.height);x.drawImage(cv,0,0);const a=document.createElement("a");a.href=c.toDataURL("image/png");a.download="apex-sprint-image.png";a.click()};
+const stepsTable=R=>R.stepsL.length?`<div style="overflow-x:auto"><table><tr><th>Pas</th><th>Pied</th><th>Contact (ms)</th><th>Vol (ms)</th><th>Durée (ms)</th><th>Longueur (m)</th><th>Pose devant bassin (cm)</th></tr>`+R.stepsL.map((x,i)=>`<tr><td>${i+1}</td><td>${x.f==="L"?"G":"D"}</td><td class="${!R.rel&&x.ct>R.thr.CT?"w":""}">${R.rel?"n/d":(x.ct*1000).toFixed(0)}</td><td>${R.rel?"n/d":(x.fl*1000).toFixed(0)}</td><td>${(x.t*1000).toFixed(0)}</td><td>${R.rel?"n/d":x.len.toFixed(2)}</td><td class="${x.at>R.thr.AT?"w":""}">${x.at.toFixed(0)}</td></tr>`).join("")+`</table></div><p class="mut">Les valeurs en rouge dépassent la cible. G : pied gauche, D : pied droit.</p>`:`<p class="mut">Pas assez de pas détectés.</p>`;
+function chart(id,ser,st2,n){const c=$(id),x=c.getContext("2d"),W=c.width,H=c.height,all=ser.flatMap(q=>q.d),mn=Math.min(...all),mx=Math.max(...all);x.clearRect(0,0,W,H);
+st2.forEach(t=>{x.fillStyle=t.f==="L"?"rgba(255,90,31,.14)":"rgba(46,204,113,.14)";x.fillRect(t.s/n*W,0,(t.e-t.s+1)/n*W,H)});
+ser.forEach(q=>{x.strokeStyle=q.c;x.lineWidth=3;x.beginPath();q.d.forEach((y,i)=>{const px=i/(n-1)*W,py=H-8-(y-mn)/(mx-mn||1)*(H-16);i?x.lineTo(px,py):x.moveTo(px,py)});x.stroke()});
+x.fillStyle="#9aa0a6";x.font="16px system-ui";x.fillText(mx.toFixed(0)+"°",6,18);x.fillText(mn.toFixed(0)+"°",6,H-10)}
+function drawCharts(R){const A=R.A,n=R.n;chart("c1",[{d:A.map(a=>a.trunk),c:"#FF5A1F"}],R.stances,n);chart("c2",[{d:A.map(a=>a.L.knee),c:"#FF5A1F"},{d:A.map(a=>a.R.knee),c:"#2ECC71"}],R.stances,n);chart("c3",[{d:A.map(a=>a.L.thigh),c:"#FF5A1F"},{d:A.map(a=>a.R.thigh),c:"#2ECC71"}],R.stances,n)}
+const DEF={trunkHi:["Tronc trop penché pour cette phase","Abdominaux profonds, érecteurs du rachis, fléchisseurs de hanche","Planche dynamique 3 x 40 s ; relevés de jambes tendues 3 x 10 ; marche genoux hauts en se grandissant","Grandis-toi, regarde devant, bassin haut."],
+trunkLo:["Tronc trop redressé pour cette phase","Fessiers, ischio-jambiers, quadriceps","Poussées de traîneau 6 x 20 m ; départs en appui incliné 4 x 10 m ; hip thrust 3 x 8","Garde le corps incliné et pousse le sol vers l’arrière."],
+foot:["Pose de pied trop en avant du bassin (freinage)","Ischio-jambiers, fessiers, mollets","Griffés 4 x 20 m ; nordiques 3 x 4 ; marche du soldat","Pose le pied sous le bassin, ramène-le vite vers le bas et l’arrière."],
+push:["Extension de poussée incomplète","Quadriceps, fessiers, triceps sural","Squat 4 x 5 ; hip thrust 3 x 8 ; bondissements 3 x 20 m ; montées en côte courte","Termine l’appui jambe tendue avant de relever le pied."],
+knee:["Montée de genou limitée","Fléchisseurs de hanche (psoas, droit fémoral), abdominaux","Relevés de genou lestés 3 x 12 ; A-skips 4 x 20 m ; marche genoux hauts avec élastique","Monte le genou devant toi, cheville sous le genou."],
+heel:["Récupération du talon incomplète","Ischio-jambiers","Leg curl 3 x 8 ; talons-fesses 4 x 20 m ; nordiques 3 x 4","Ramène le talon près des fessiers pendant le passage de jambe."],
+contact:["Temps de contact trop long","Mollets et tendon d’Achille, raideur du pied","Skips bas 4 x 20 m ; corde à sauter 3 x 40 s ; sauts de haies bas 4 x 5","Appuis courts et dynamiques, comme sur une surface brûlante."],
+asym:["Asymétrie gauche/droite","Fessiers et ischio-jambiers du côté le plus faible","Fentes bulgares 3 x 8 ; hip thrust unilatéral 3 x 8 ; leg curl unilatéral 3 x 8","Commence par le côté faible, même nombre de répétitions des deux côtés."],
+fatigue:["Dérive technique avec la fatigue","Endurance de vitesse, gainage, mollets","Répétitions de 150 m à 90 % ; gainage 3 x 40 s ; tempo spécifique","Garde la même technique quand ça brûle : grandis-toi, relâche les épaules."]};
+function show(R){const tb=stepsTable(R),q=R.vis<60||R.steps<4;let h=`<div class="card"><h2>Résultats</h2><p class="mut">${R.slow>1?`<b>Ralenti x${R.slow} détecté et corrigé</b> (images par seconde réelles estimées : ${R.fps}). `:""}Détection : ${R.vis.toFixed(0)} % de confiance, ${R.steps} pas détectés, ${R.n} images.${q?` <b style="color:var(--r)">Fiabilité limitée :</b> ${R.steps<4?"moins de 4 pas détectés, filme au moins 5 à 6 pas. ":""}${R.vis<60?"le corps est mal visible (angle, lumière, vêtements). ":""}`:""}${R.fps<120?" Avec moins de 120 images par seconde, les temps de contact et de vol sont approximatifs.":""}${R.cam>2?` Mouvement de caméra corrigé : jusqu’à ${R.cam.toFixed(0)} px.`:""}${R.hit>.2?" <b>Le mouvement de caméra dépasse ce que l’outil sait corriger sur une partie de la vidéo.</b>":""}${R.rel?" <b>Appuis détectés par la position du pied par rapport au bassin (caméra instable) : contact, vol, longueur de pas et vitesse non mesurés.</b>":""}</p><div class="grid">`+
+R.M.map(m=>`<div class="m ${m.st}"><span>${m.label}</span><b>${m.txt}</b><small>${m.rng==="info"?"mesure indicative":"cible : "+m.rng}</small><br><span class="tg">${m.st==="ok"?"Dans la cible":m.st==="warn"?"À corriger":m.st==="info"?"":"Non mesurable"}</span></div>`).join("")+`</div>`;
+if(R.fatigue.length)h+=`<h2 style="margin-top:18px">Dérive début → fin du passage</h2><div class="grid">`+R.fatigue.map(x=>`<div class="m ${x[2]?"warn":"ok"}"><span>${x[0]}</span><b>${x[1]}</b><span class="tg">${x[2]?"À surveiller":"Stable"}</span></div>`).join("")+`</div>`;
+h+=`</div><div class="card"><h2>Détail pas par pas</h2>${tb}</div><div class="card"><h2>Courbes de la course</h2><p class="mut">Bandes orange : pied gauche au sol. Bandes vertes : pied droit au sol.</p><b>Angle du tronc</b><canvas class="ch" id="c1" width="900" height="220"></canvas><b>Angle des genoux (orange : gauche, vert : droit)</b><canvas class="ch" id="c2" width="900" height="220"></canvas><b>Angle des cuisses, montée du genou (orange : gauche, vert : droit)</b><canvas class="ch" id="c3" width="900" height="220"></canvas></div><div class="card"><h2>Points négatifs, muscles à cibler, correctifs</h2>`+(R.D.length?R.D.map(x=>{const d=DEF[x.d];return`<div class="df"><b>${d[0]}</b><div class="mut">Mesure : ${x.why}</div><div><b>Muscles :</b> ${d[1]}</div><div><b>Exercices :</b> ${d[2]}</div><div><b>Consigne :</b> ${d[3]}</div></div>`}).join(""):`<p>Aucun défaut détecté sur ce passage, selon les seuils actuels.</p>`)+`<p class="mut">Seuils de départ à faire valider par un entraîneur. Les mesures supposent une caméra fixe, de profil.</p><button class="alt" id="ex">Exporter les mesures (JSON)</button></div>`;
+$("res").innerHTML=h;drawCharts(R);$("ex").onclick=()=>{const b=new Blob([JSON.stringify({mesures:R.M,defauts:R.D,fatigue:R.fatigue,tronc:R.A.map(a=>+a.trunk.toFixed(1)),contacts:R.stances,pas:R.stepsL},null,1)],{type:"application/json"}),a=document.createElement("a");a.href=URL.createObjectURL(b);a.download="apex-sprint-mesures.json";a.click()}}
+</script></body></html>
